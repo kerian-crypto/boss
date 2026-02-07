@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analyse P2P USDT/XAF - Binance</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Archivo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container-fluid">
+        <!-- Header -->
+        <header class="header-section">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="main-title">USDT/XAF</h1>
+                    <p class="subtitle">Analyse du marché P2P Binance en temps réel</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="update-info">
+                        <span class="update-label">Dernière mise à jour</span>
+                        <span class="update-time" id="lastUpdate">--:--:--</span>
+                    </div>
+                    <button class="btn-refresh" id="refreshBtn">
+                        <span class="refresh-icon">↻</span> Actualiser
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Stats Cards -->
+        <div class="row stats-row">
+            <div class="col-md-3">
+                <div class="stat-card buy-card">
+                    <div class="stat-label">Prix d'Achat Moyen</div>
+                    <div class="stat-value" id="avgBuyPrice">---</div>
+                    <div class="stat-change" id="buyChange">---%</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card sell-card">
+                    <div class="stat-label">Prix de Vente Moyen</div>
+                    <div class="stat-value" id="avgSellPrice">---</div>
+                    <div class="stat-change" id="sellChange">---%</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card spread-card">
+                    <div class="stat-label">Spread</div>
+                    <div class="stat-value" id="spreadValue">---</div>
+                    <div class="stat-change" id="spreadPercent">---%</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card volume-card">
+                    <div class="stat-label">Volume Total</div>
+                    <div class="stat-value" id="totalVolume">---</div>
+                    <div class="stat-change">USDT</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="row chart-row">
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3 class="chart-title">Taux d'Achat (BUY)</h3>
+                        <div class="chart-controls">
+                            <button class="chart-btn" onclick="resetZoom('buyChart')">⊙ Reset</button>
+                        </div>
+                    </div>
+                    <canvas id="buyChart"></canvas>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3 class="chart-title">Taux de Vente (SELL)</h3>
+                        <div class="chart-controls">
+                            <button class="chart-btn" onclick="resetZoom('sellChart')">⊙ Reset</button>
+                        </div>
+                    </div>
+                    <canvas id="sellChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Combined Chart -->
+        <div class="row chart-row">
+            <div class="col-12">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3 class="chart-title">Vue Comparative - Achat vs Vente</h3>
+                        <div class="chart-controls">
+                            <button class="chart-btn" onclick="resetZoom('combinedChart')">⊙ Reset</button>
+                        </div>
+                    </div>
+                    <canvas id="combinedChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Tables -->
+        <div class="row table-row">
+            <div class="col-md-6">
+                <div class="table-container">
+                    <h3 class="table-title">Top 10 - Offres d'Achat</h3>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Prix (XAF)</th>
+                                    <th>Volume (USDT)</th>
+                                    <th>Min - Max (XAF)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="buyTableBody">
+                                <tr><td colspan="4" class="text-center">Chargement...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="table-container">
+                    <h3 class="table-title">Top 10 - Offres de Vente</h3>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Prix (XAF)</th>
+                                    <th>Volume (USDT)</th>
+                                    <th>Min - Max (XAF)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sellTableBody">
+                                <tr><td colspan="4" class="text-center">Chargement...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Chargement des données...</div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
