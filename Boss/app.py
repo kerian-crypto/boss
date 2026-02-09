@@ -5,15 +5,25 @@ import requests
 from datetime import datetime
 import time
 
+
 app = Flask(__name__)
 
 URL = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
 HEADERS = {
     "Content-Type": "application/json",
-    "User-Agent": "Mozilla/5.0"
+    "Accept": "*/*",
+    "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Origin": "https://p2p.binance.com",
+    "Referer": "https://p2p.binance.com/",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/121.0.0.0 Safari/537.36"
+    )
 }
 
-def fetch_p2p_usdt(trade_type="BUY", fiat="NGN", rows=30):
+
+def fetch_p2p_usdt(trade_type="BUY", fiat="XAF", rows=20):
     payload = {
         "asset": "USDT",
         "fiat": fiat,
@@ -21,7 +31,7 @@ def fetch_p2p_usdt(trade_type="BUY", fiat="NGN", rows=30):
         "page": 1,
         "rows": rows,
         "payTypes": [],
-        "publisherType": "Merchant"
+        "publisherType": None
     }
 
     try:
@@ -116,8 +126,8 @@ def get_rates():
     """API endpoint pour récupérer les taux actuels (30 annonces)"""
     try:
         # Récupérer 30 annonces d'achat et 30 de vente
-        buy_rates = fetch_p2p_usdt("BUY", rows=30)
-        sell_rates = fetch_p2p_usdt("SELL", rows=30)
+        buy_rates = fetch_p2p_usdt("BUY","XAF", rows=20)
+        sell_rates = fetch_p2p_usdt("SELL","XAF", rows=20)
         
         # Calculer les chandeliers
         buy_candle = calculate_candlestick_data(buy_rates)
