@@ -1,10 +1,11 @@
 // Configuration globale
+// Configuration globale
 let buyChart, sellChart, combinedChart;
-let chartData = {
-    buy: [],
-    sell: []
-};
+let globalData = null; // Stocke toutes les données (30 annonces)
 let previousData = null;
+
+// Variables de pagination
+
 
 // Initialisation au chargement de la page
 document.addEventListener('DOMContentLoaded', function() {
@@ -20,6 +21,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+// Initialisation des graphiques
 // Initialisation des graphiques
 function initCharts() {
     Chart.defaults.color = '#8b93a7';
@@ -60,34 +62,33 @@ function initCharts() {
                         ];
                     }
                 }
-            },
-            zoom: {
-                zoom: {
-                    wheel: {
-                        enabled: true,
-                        speed: 0.1
-                    },
-                    pinch: {
-                        enabled: true
-                    },
-                    mode: 'xy'
-                },
-                pan: {
-                    enabled: true,
-                    mode: 'xy'
-                }
             }
         },
         scales: {
             x: {
+                display: true,
+                title: {
+                    display: true,
+                    text: 'Offre P2P',
+                    color: '#8b93a7'
+                },
                 grid: {
                     color: '#252d3d'
                 },
                 ticks: {
-                    color: '#8b93a7'
+                    color: '#8b93a7',
+                    callback: function(value, index, values) {
+                        return '#' + (index + 1);
+                    }
                 }
             },
             y: {
+                display: true,
+                title: {
+                    display: true,
+                    text: 'Prix (XAF)',
+                    color: '#8b93a7'
+                },
                 grid: {
                     color: '#252d3d'
                 },
@@ -96,12 +97,13 @@ function initCharts() {
                     callback: function(value) {
                         return value.toFixed(0) + ' XAF';
                     }
-                }
+                },
+                beginAtZero: false // Important: ne pas commencer à 0
             }
         }
     };
 
-    // Graphique d'achat (vert)
+    // Graphique d'achat (vert) - CHANDELIER
     const buyCtx = document.getElementById('buyChart').getContext('2d');
     buyChart = new Chart(buyCtx, {
         type: 'candlestick',
@@ -124,7 +126,7 @@ function initCharts() {
         options: commonOptions
     });
 
-    // Graphique de vente (rouge)
+    // Graphique de vente (rouge) - CHANDELIER
     const sellCtx = document.getElementById('sellChart').getContext('2d');
     sellChart = new Chart(sellCtx, {
         type: 'candlestick',
@@ -147,7 +149,7 @@ function initCharts() {
         options: commonOptions
     });
 
-    // Graphique combiné
+    // Graphique combiné - GARDER EN LIGNE (comme avant)
     const combinedCtx = document.getElementById('combinedChart').getContext('2d');
     combinedChart = new Chart(combinedCtx, {
         type: 'line',
@@ -212,22 +214,11 @@ function initCharts() {
                     borderWidth: 1,
                     titleColor: '#e8ecf5',
                     bodyColor: '#8b93a7',
-                    padding: 12
-                },
-                zoom: {
-                    zoom: {
-                        wheel: {
-                            enabled: true,
-                            speed: 0.1
-                        },
-                        pinch: {
-                            enabled: true
-                        },
-                        mode: 'xy'
-                    },
-                    pan: {
-                        enabled: true,
-                        mode: 'xy'
+                    padding: 12,
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${context.raw.toFixed(2)} XAF`;
+                        }
                     }
                 }
             },
@@ -241,6 +232,7 @@ function initCharts() {
                     }
                 },
                 y: {
+                    beginAtZero: false, // IMPORTANT: ne pas commencer à 0
                     grid: {
                         color: '#252d3d'
                     },
@@ -255,7 +247,6 @@ function initCharts() {
         }
     });
 }
-
 // Chargement des données depuis l'API
 async function loadData() {
     showLoading(true);
@@ -284,42 +275,72 @@ async function loadData() {
 
 // Mise à jour des graphiques
 function updateCharts(data) {
-    // Conversion des données en format chandelier
-    const buyCandles = data.buy.rates.map((rate, index) => ({
-        x: index + 1,
-        o: rate.price,
-        h: rate.price * 1.001,
-        l: rate.price * 0.999,
-        c: rate.price
-    }));
-
-    const sellCandles = data.sell.rates.map((rate, index) => ({
-        x: index + 1,
-        o: rate.price,
-        h: rate.price * 1.001,
-        l: rate.price * 0.999,
-        c: rate.price
-    }));
-
-    // Mise à jour graphique d'achat
-    buyChart.data.datasets[0].data = buyCandles;
-    buyChart.update('none');
-
-    // Mise à jour graphique de vente
-    sellChart.data.datasets[0].data = sellCandles;
-    sellChart.update('none');
-
-    // Mise à jour graphique combiné
-    const labels = data.buy.rates.map((_, i) => `Offre ${i + 1}`);
-    const buyPrices = data.buy.rates.map(r => r.price);
-    const sellPrices = data.sell.rates.map(r => r.price);
-
-    combinedChart.data.labels = labels;
-    combinedChart.data.datasets[0].data = buyPrices;
-    combinedChart.data.datasets[1].data = sellPrices;
-    combinedChart.update('none');
+    console.log('Données reçues pour graphiques:', data);
+    
+    // Vérifier si les graphiques sont initialisés
+    if (!buyChart || !sellChart || !combinedChart) {
+        console.error('Graphiques non initialisés');
+        return;
+    }
+    
+    // Vérifier si les données existent
+    if (!data.buy || !data.sell) {
+        console.error('Données manquantes pour les graphiques');
+        return;
+    }
+    
+    // 1. Graphique d'achat (BUY) - Chandelier
+    if (data.buy.rates && data.buy.rates.length > 0) {
+        // Créer un chandelier par offre
+        const buyCandles = data.buy.rates.map((rate, index) => {
+            // Pour un chandelier, nous avons besoin de O, H, L, C
+            // Pour simuler un chandelier, nous utilisons le même prix avec une petite variation
+            const price = rate.price;
+            return {
+                x: index, // Position
+                o: price * 0.998,  // Ouverture: légèrement inférieur
+                h: price * 1.002,  // Plus haut
+                l: price * 0.995,  // Plus bas
+                c: price * 1.001   // Clôture: légèrement supérieur
+            };
+        });
+        
+        console.log('Chandeliers Achat:', buyCandles);
+        buyChart.data.datasets[0].data = buyCandles;
+        buyChart.update('none');
+    }
+    
+    // 2. Graphique de vente (SELL) - Chandelier
+    if (data.sell.rates && data.sell.rates.length > 0) {
+        const sellCandles = data.sell.rates.map((rate, index) => {
+            const price = rate.price;
+            return {
+                x: index,
+                o: price * 0.998,
+                h: price * 1.002,
+                l: price * 0.995,
+                c: price * 1.001
+            };
+        });
+        
+        console.log('Chandeliers Vente:', sellCandles);
+        sellChart.data.datasets[0].data = sellCandles;
+        sellChart.update('none');
+    }
+    
+    // 3. Graphique combiné - Garder en ligne comme avant
+    if (data.buy.rates && data.sell.rates) {
+        const labels = data.buy.rates.map((_, i) => `Offre ${i + 1}`);
+        const buyPrices = data.buy.rates.map(r => r.price);
+        const sellPrices = data.sell.rates.map(r => r.price);
+        
+        combinedChart.data.labels = labels;
+        combinedChart.data.datasets[0].data = buyPrices;
+        combinedChart.data.datasets[1].data = sellPrices;
+        combinedChart.update('none');
+        console.log('Graphique combiné mis à jour');
+    }
 }
-
 // Mise à jour des statistiques
 function updateStats(data) {
     const buyPrices = data.buy.rates.map(r => r.price);
@@ -426,5 +447,210 @@ function resetZoom(chartName) {
         case 'combinedChart':
             combinedChart.resetZoom();
             break;
+    }
+}
+
+// Fonction pour vérifier si les éléments existent
+function checkElements() {
+    console.log('buyChart élément:', document.getElementById('buyChart'));
+    console.log('sellChart élément:', document.getElementById('sellChart'));
+    console.log('combinedChart élément:', document.getElementById('combinedChart'));
+    
+    // Vérifier si Chart est défini
+    console.log('Chart global:', typeof Chart);
+    
+    // Vérifier si le plugin candlestick est disponible
+    console.log('Candlestick disponible:', Chart.controllers.candlestick ? 'Oui' : 'Non');
+}
+
+
+
+
+// Variables de pagination
+let currentBuyPage = 1;
+let currentSellPage = 1;
+const itemsPerPage = 10; // 10 annonces par page
+
+// Initialisation au chargement de la page
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // Pagination - Boutons Achat
+    document.getElementById('prevBuyBtn').addEventListener('click', function() {
+        if (currentBuyPage > 1) {
+            currentBuyPage--;
+            updateTables();
+        }
+    });
+    
+    document.getElementById('nextBuyBtn').addEventListener('click', function() {
+        if (currentBuyPage < 3) { // 30 annonces / 10 par page = 3 pages
+            currentBuyPage++;
+            updateTables();
+        }
+    });
+    
+    // Pagination - Boutons Vente
+    document.getElementById('prevSellBtn').addEventListener('click', function() {
+        if (currentSellPage > 1) {
+            currentSellPage--;
+            updateTables();
+        }
+    });
+    
+    document.getElementById('nextSellBtn').addEventListener('click', function() {
+        if (currentSellPage < 3) {
+            currentSellPage++;
+            updateTables();
+        }
+    });
+    
+    // Actualisation automatique toutes les 30 secondes
+    setInterval(loadData, 30000);
+});
+
+// Mise à jour des graphiques pour 30 annonces
+function updateCharts(data) {
+    console.log('Données reçues pour graphiques:', data);
+    
+    // Vérifier si les graphiques sont initialisés
+    if (!buyChart || !sellChart || !combinedChart) {
+        console.error('Graphiques non initialisés');
+        return;
+    }
+    
+    // Vérifier si les données existent
+    if (!data.buy || !data.sell) {
+        console.error('Données manquantes pour les graphiques');
+        return;
+    }
+    
+    // 1. Graphique d'achat (BUY) - Chandelier avec 30 annonces
+    if (data.buy.rates && data.buy.rates.length > 0) {
+        // Créer un chandelier par offre (sur les 30 annonces)
+        const buyCandles = data.buy.rates.map((rate, index) => {
+            const price = rate.price;
+            return {
+                x: index + 1, // Position 1 à 30
+                o: price * 0.999,  // Ouverture
+                h: price * 1.001,  // Plus haut
+                l: price * 0.998,  // Plus bas
+                c: price           // Clôture
+            };
+        });
+        
+        console.log('Chandeliers Achat (30):', buyCandles);
+        buyChart.data.datasets[0].data = buyCandles;
+        buyChart.update('none');
+    }
+    
+    // 2. Graphique de vente (SELL) - Chandelier avec 30 annonces
+    if (data.sell.rates && data.sell.rates.length > 0) {
+        const sellCandles = data.sell.rates.map((rate, index) => {
+            const price = rate.price;
+            return {
+                x: index + 1,
+                o: price * 0.999,
+                h: price * 1.001,
+                l: price * 0.998,
+                c: price
+            };
+        });
+        
+        console.log('Chandeliers Vente (30):', sellCandles);
+        sellChart.data.datasets[0].data = sellCandles;
+        sellChart.update('none');
+    }
+    
+    // 3. Graphique combiné - Afficher les 30 annonces
+    if (data.buy.rates && data.sell.rates) {
+        const labels = data.buy.rates.map((_, i) => `A${i + 1}`);
+        const buyPrices = data.buy.rates.map(r => r.price);
+        const sellPrices = data.sell.rates.map(r => r.price);
+        
+        combinedChart.data.labels = labels;
+        combinedChart.data.datasets[0].data = buyPrices;
+        combinedChart.data.datasets[1].data = sellPrices;
+        combinedChart.update('none');
+        console.log('Graphique combiné mis à jour avec 30 annonces');
+    }
+}
+
+// Mise à jour des tableaux avec pagination
+function updateTables() {
+    if (!globalData) return;
+    
+    updateTable('buyTableBody', globalData.buy.rates, 'buy', currentBuyPage);
+    updateTable('sellTableBody', globalData.sell.rates, 'sell', currentSellPage);
+    
+    // Mettre à jour les informations de page
+    document.getElementById('buyPageInfo').textContent = 
+        `Page ${currentBuyPage}/3`;
+    document.getElementById('sellPageInfo').textContent = 
+        `Page ${currentSellPage}/3`;
+}
+
+function updateTable(tableId, rates, type, page) {
+    const tbody = document.getElementById(tableId);
+    tbody.innerHTML = '';
+    
+    // Calculer les indices pour la pagination
+    const startIndex = (page - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const pageRates = rates.slice(startIndex, endIndex);
+    
+    pageRates.forEach((rate, index) => {
+        const globalIndex = startIndex + index;
+        const row = tbody.insertRow();
+        
+        // Formater les méthodes de paiement
+        const paymentsHtml = rate.payments && rate.payments.length > 0 
+            ? rate.payments.map(p => `<span class="payment-method">${p}</span>`).join(', ')
+            : 'N/A';
+        
+        row.innerHTML = `
+            <td>${globalIndex + 1}</td>
+            <td class="price-${type}">${rate.price.toFixed(2)}</td>
+            <td>${rate.volume.toFixed(2)}</td>
+            <td>${rate.min.toFixed(0)} - ${rate.max.toFixed(0)}</td>
+            <td class="payments">${paymentsHtml}</td>
+        `;
+        
+        // Animation d'apparition
+        row.style.opacity = '0';
+        row.style.transform = 'translateY(10px)';
+        setTimeout(() => {
+            row.style.transition = 'all 0.3s ease';
+            row.style.opacity = '1';
+            row.style.transform = 'translateY(0)';
+        }, index * 20);
+    });
+}
+
+// Chargement des données depuis l'API
+async function loadData() {
+    showLoading(true);
+    
+    try {
+        const response = await fetch('/api/rates');
+        const data = await response.json();
+        
+        if (data.success) {
+            // Sauvegarder les données globalement
+            globalData = data;
+            
+            updateCharts(data);
+            updateStats(data);
+            updateTables(); // Utilise la pagination
+            updateTimestamp(data.timestamp);
+            previousData = data;
+        } else {
+            console.error('Erreur:', data.error);
+            alert('Erreur lors du chargement des données: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Erreur:', error);
+        alert('Erreur de connexion au serveur');
+    } finally {
+        showLoading(false);
     }
 }
